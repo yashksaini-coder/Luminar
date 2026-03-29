@@ -5,6 +5,7 @@ export type StatusCallback = (connected: boolean) => void
 export type SnapshotCallback = (snap: any) => void
 export type MetricsCallback = (metrics: any) => void
 export type AnalyticsCallback = (analytics: any) => void
+export type TelemetryStatusCallback = (status: any) => void
 
 const BATCH_MS = 50
 const MAX_RECONNECT = 10_000
@@ -20,6 +21,7 @@ class WSManager {
   private onSnapshot: SnapshotCallback | null = null
   private onMetrics: MetricsCallback | null = null
   private onAnalytics: AnalyticsCallback | null = null
+  private onTelemetryStatus: TelemetryStatusCallback | null = null
   private closed = false
 
   connect(
@@ -28,12 +30,14 @@ class WSManager {
     onSnapshot?: SnapshotCallback,
     onMetrics?: MetricsCallback,
     onAnalytics?: AnalyticsCallback,
+    onTelemetryStatus?: TelemetryStatusCallback,
   ) {
     this.onBatch = onBatch
     this.onStatus = onStatus
     this.onSnapshot = onSnapshot ?? null
     this.onMetrics = onMetrics ?? null
     this.onAnalytics = onAnalytics ?? null
+    this.onTelemetryStatus = onTelemetryStatus ?? null
     this.closed = false
     this.open()
   }
@@ -92,6 +96,8 @@ class WSManager {
         this.onMetrics?.(msg)
       } else if (msg.type === 'analytics') {
         this.onAnalytics?.(msg)
+      } else if (msg.type === 'telemetry_status') {
+        this.onTelemetryStatus?.(msg)
       } else {
         this.batch.push(msg as AppEvent)
       }

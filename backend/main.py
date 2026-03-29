@@ -27,6 +27,8 @@ from backend.metrics.collector import MetricsCollector
 from backend.scenarios.library import SCENARIOS
 from backend.scenarios.runner import ScenarioRunner
 from backend.simulation.engine import SimulationEngine
+from backend.telemetry.manager import TelemetryManager
+from backend.telemetry.models import TelemetryPayload
 from backend.topology.manager import TopologyConfig, TopologyManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -38,6 +40,7 @@ fault_injector: FaultInjector | None = None
 metrics_collector: MetricsCollector | None = None
 topology_manager = TopologyManager()
 scenario_runner = ScenarioRunner()
+telemetry_manager = TelemetryManager()
 _trio_token: trio.lowlevel.TrioToken | None = None
 _initial_edges: list[tuple[str, str]] = []
 _sim_cancel_scope: trio.CancelScope | None = None
@@ -106,10 +109,12 @@ async def lifespan(app: FastAPI):
     n_nodes = int(os.environ.get("LUMINAR_NODE_COUNT", os.environ.get("LUMINA_NODE_COUNT", 20)))
     _build_simulation(n_nodes)
     _start_sim_thread()
+    telemetry_manager.start()
     logger.info("Luminar P2P ready — %d nodes, %d edges", n_nodes, len(_initial_edges))
 
     yield
 
+    telemetry_manager.stop()
     engine.clock.stop()
 
 
@@ -167,6 +172,10 @@ async def websocket_events(ws: WebSocket):
             if tick_counter % 10 == 0:
                 snap = engine.get_snapshot()
                 snap["type"] = "snapshot"
+                telem = telemetry_manager.get_nodes_as_peer_dicts()
+                if telem:
+                    snap["nodes"] = snap["nodes"] + telem
+                    snap["node_count"] = len(snap["nodes"])
                 await ws.send_bytes(orjson.dumps(snap))
 
             # ── Metrics + Analytics (every 40 ticks = 2s) ──
@@ -182,6 +191,13 @@ async def websocket_events(ws: WebSocket):
                     analytics = engine.node_pool.gossip.get_analytics("lumina/blocks/1.0")
                     analytics["type"] = "analytics"
                     await ws.send_bytes(orjson.dumps(analytics))
+                except Exception:
+                    pass
+
+                try:
+                    telem_status = telemetry_manager.get_status()
+                    telem_status["type"] = "telemetry_status"
+                    await ws.send_bytes(orjson.dumps(telem_status))
                 except Exception:
                     pass
 
@@ -751,6 +767,52 @@ async def launch_scenario(scenario_id: str, req: LaunchScenarioRequest | None = 
 async def active_scenario():
     """Return the currently running scenario and its phase progress."""
     return scenario_runner.get_status()
+
+
+# --- Telemetry Ingestion ---
+
+
+@app.post("/api/telemetry/submit")
+async def telemetry_submit(payload: TelemetryPayload):
+    """Accept a telemetry payload from a real peer node."""
+    await telemetry_manager.ingest(payload, _trio_token, engine.event_bus if engine else None)
+    return {"ok": True}
+
+
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(ws: WebSocket):
+    """WebSocket endpoint for persistent telemetry streams.
+
+    Peers send JSON payloads and receive {"ok": true} acknowledgements.
+    """
+    await ws.accept()
+    logger.info("Telemetry WS peer connected")
+    try:
+        while True:
+            text = await ws.receive_text()
+            try:
+                data = orjson.loads(text)
+                payload = TelemetryPayload(**data)
+                await telemetry_manager.ingest(payload, _trio_token, engine.event_bus if engine else None)
+                await ws.send_text('{"ok":true}')
+            except Exception as exc:
+                await ws.send_text(f'{{"ok":false,"error":{str(exc)!r}}}')
+    except WebSocketDisconnect:
+        logger.info("Telemetry WS peer disconnected")
+    except Exception:
+        logger.exception("Telemetry WS handler error")
+
+
+@app.get("/api/telemetry/status")
+async def telemetry_status():
+    """Return current telemetry peer registry status."""
+    return telemetry_manager.get_status()
+
+
+@app.get("/api/telemetry/peers")
+async def telemetry_peers():
+    """Return the list of active telemetry peers."""
+    return {"peers": telemetry_manager.get_status()["peers"]}
 
 
 # --- SPA static files (must be last — catches all non-API routes) ---

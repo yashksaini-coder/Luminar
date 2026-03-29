@@ -8,6 +8,7 @@ import { computeLayout, startLiveForce, stopLiveForce } from './map/layout'
 import { initStatsPanel, updateStatsPanel } from './ui/stats-panel'
 import { initEventsPanel, appendEvents } from './ui/events-panel'
 import { initPeerInspector, refreshPeerInspector, appendPeerInspectorEvents } from './ui/peer-inspector'
+import { initTelemetryPanel, toggleTelemetryPanel, updateTelemetryPanel } from './ui/telemetry-panel'
 import { initPlayback, updatePlaybackUI } from './ui/playback'
 import { initLegend } from './ui/legend'
 import { initModeSwitcher } from './ui/mode-switcher'
@@ -342,6 +343,16 @@ function handleWsAnalytics(analytics: any) {
   updateStatsPanel()
 }
 
+// ── WebSocket-pushed telemetry status handler ──
+function handleWsTelemetryStatus(status: any) {
+  const badge = document.getElementById('telemetry-badge') as HTMLButtonElement | null
+  if (!badge) return
+  badge.style.display = status.active ? 'inline-flex' : 'none'
+  const countEl = document.getElementById('telem-count')
+  if (countEl) countEl.textContent = String(status.peer_count)
+  updateTelemetryPanel(status)
+}
+
 // ── Fault flash notification ──
 function showFaultFlash(message: string) {
   const existing = document.getElementById('fault-flash')
@@ -414,11 +425,15 @@ async function main() {
   initStatsPanel()
   initEventsPanel()
   initPeerInspector()
+  initTelemetryPanel()
   initPlayback()
   initLegend()
   initKeyboard()
   initDropdowns()
   initPresets()
+
+  // Telemetry badge click → toggle panel
+  document.getElementById('telemetry-badge')?.addEventListener('click', toggleTelemetryPanel)
 
   // Initialize renderer
   const deckCanvas = document.getElementById('deck-canvas') as HTMLCanvasElement
@@ -452,6 +467,7 @@ async function main() {
     handleWsSnapshot,
     handleWsMetrics,
     handleWsAnalytics,
+    handleWsTelemetryStatus,
   )
 
   // Initial data fetch (one-time, then WS takes over)

@@ -302,6 +302,27 @@ export function renderLayers() {
     },
   }))
 
+  // 4b. Telemetry node rings — green pulsing outline to distinguish real peers
+  const telemData = nodeData.filter((d: any) => d.is_telemetry)
+  if (telemData.length > 0) {
+    const pulse = 0.55 + 0.45 * Math.sin(now / 900)  // 0.1–1.0 breathing alpha
+    layers.push(new ScatterplotLayer({
+      id: 'telem-rings',
+      data: telemData,
+      getPosition: (d: any) => d._pos,
+      getRadius: (d: any) => (d._idx === selectedNode ? nodeRadius * 1.5 : nodeRadius) + 4,
+      getFillColor: [0, 0, 0, 0],
+      getLineColor: oklchToRgba(P.decoded, Math.round(pulse * 200)),
+      stroked: true,
+      filled: false,
+      lineWidthMinPixels: 1.5,
+      radiusUnits: 'common' as const,
+      antialiasing: true,
+      lineWidthUnits: 'pixels' as const,
+      pickable: false,
+    }))
+  }
+
   // 5. Selection ring
   if (selectedNode >= 0 && selectedNode < n && nodePositions[selectedNode]) {
     layers.push(new ScatterplotLayer({

@@ -18,6 +18,9 @@
         <span id="status-dot" class="dot-offline"></span>
         <span id="status-label">OFFLINE</span>
       </span>
+      <button id="telemetry-badge" class="tb-telem-badge" style="display:none" title="Toggle telemetry panel">
+        <span class="tb-telem-dot"></span>TELEMETRY <span id="telem-count">0</span>
+      </button>
       <span class="tb-sep"></span>
 
       <!-- Scenario picker -->
@@ -87,6 +90,25 @@
       <div id="map-container">
         <canvas id="deck-canvas"></canvas>
         <canvas id="ring-canvas"></canvas>
+
+        <!-- TELEMETRY PANEL (slide-in from left) -->
+        <div id="telemetry-panel">
+          <div class="tp-header">
+            <div class="tp-title">
+              <span class="tp-live-dot"></span>
+              <span>TELEMETRY</span>
+            </div>
+            <button id="tp-close" class="pi-close" title="Close">&#10005;</button>
+          </div>
+          <div id="tp-summary" class="tp-summary">No peers connected — waiting for reports…</div>
+          <div class="tp-hint">
+            <code>curl -X POST /api/telemetry/submit -d '{"peer_id":"…"}'</code>
+          </div>
+          <div class="tp-section-title">Live peers</div>
+          <div id="tp-peer-list" class="tp-peer-list"></div>
+          <div class="tp-section-title">Check-in feed</div>
+          <div id="tp-feed" class="tp-feed"></div>
+        </div>
 
         <!-- Mode switcher (Force/Hops/Latency) -->
         <div id="mode-switcher">
