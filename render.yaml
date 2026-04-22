@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: luminar-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/sim/snapshot
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: LUMINAR_NODE_COUNT
+        value: "20"
